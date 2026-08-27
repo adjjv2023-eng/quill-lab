@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  appendTrailPoint,
   clamp,
   createOrbiters,
   createSpore,
+  createTrail,
   hashText,
   oracleFor,
   paletteFor,
@@ -40,6 +42,14 @@ describe("garden primitives", () => {
     expect(spore.x).toBe(10);
     expect(spore.radius).toBeGreaterThan(0);
     expect(spore.life).toBe(1);
+  });
+
+  it("creates and extends a trail", () => {
+    const trail = createTrail(1, 2, "glass pollen", 0.6);
+    expect(trail.points).toHaveLength(1);
+    appendTrailPoint(trail, 3, 4, 0.5);
+    expect(trail.points).toHaveLength(2);
+    expect(trail.points[1]).toMatchObject({ x: 3, y: 4 });
   });
 
   it("produces different oracle text by mode", () => {

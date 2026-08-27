@@ -1,8 +1,10 @@
 import "./style.css";
 import {
   clamp,
+  appendTrailPoint,
   createOrbiters,
   createSpore,
+  createTrail,
   hsla,
   mix,
   oracleFor,
@@ -11,6 +13,7 @@ import {
   type GardenControls,
   type GardenMode,
   type Orb,
+  type Trail,
   type Spore,
 } from "./garden";
 
@@ -92,6 +95,7 @@ app.innerHTML = `
       <div class="actions">
         <button id="randomize" type="button">Randomize</button>
         <button id="freeze" type="button" data-state="off">Freeze</button>
+        <button id="capture" type="button">Capture</button>
         <button id="clear" type="button">Sweep</button>
       </div>
 
@@ -105,6 +109,7 @@ const oracleNode = document.querySelector<HTMLDivElement>("#oracle")!;
 const chipsNode = document.querySelector<HTMLDivElement>("#chips")!;
 const statsNode = document.querySelector<HTMLDivElement>("#stats")!;
 const freezeButton = document.querySelector<HTMLButtonElement>("#freeze")!;
+const captureButton = document.querySelector<HTMLButtonElement>("#capture")!;
 
 const ctx = canvas.getContext("2d")!;
 
@@ -133,13 +138,16 @@ const pointer = {
   x: 0,
   y: 0,
   active: false,
+  down: false,
 };
 
 let frozen = false;
 let orbiters = createOrbiters(controls.seed, controls);
 let spores: Spore[] = [];
+let trails: Trail[] = [];
 let lastTime = performance.now();
 let simulationTime = 0;
+let activeTrail: Trail | null = null;
 
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
@@ -149,17 +157,36 @@ canvas.addEventListener("pointermove", (event) => {
   pointer.x = event.clientX - rect.left;
   pointer.y = event.clientY - rect.top;
   pointer.active = true;
+  if (pointer.down && activeTrail) {
+    appendTrailPoint(activeTrail, pointer.x, pointer.y, event.pressure || 0.7);
+  }
 });
 
 canvas.addEventListener("pointerleave", () => {
   pointer.active = false;
+  pointer.down = false;
+  activeTrail = null;
 });
 
 canvas.addEventListener("pointerdown", (event) => {
   const rect = canvas.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const y = event.clientY - rect.top;
+  pointer.down = true;
+  canvas.setPointerCapture(event.pointerId);
+  activeTrail = createTrail(x, y, controls.seed, controls.chroma / 100);
+  trails.push(activeTrail);
   spores.push(createSpore(x, y, controls.seed, controls.bloom / 100));
+});
+
+canvas.addEventListener("pointerup", () => {
+  pointer.down = false;
+  activeTrail = null;
+});
+
+canvas.addEventListener("pointercancel", () => {
+  pointer.down = false;
+  activeTrail = null;
 });
 
 document
@@ -188,10 +215,18 @@ freezeButton.addEventListener("click", () => {
   freezeButton.textContent = frozen ? "Thaw" : "Freeze";
 });
 
+captureButton.addEventListener("click", () => {
+  const link = document.createElement("a");
+  link.download = `${slugify(controls.seed || "liminal-garden")}-${Date.now()}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+});
+
 document
   .querySelector<HTMLButtonElement>("#clear")
   ?.addEventListener("click", () => {
     spores = [];
+    trails = [];
   });
 
 for (const [key, input] of Object.entries(inputs)) {
@@ -262,9 +297,17 @@ function draw(simTime: number, dt: number): void {
     drawSpore(spore, palette);
   }
 
+  for (const trail of trails) {
+    trail.life = Math.max(0, trail.life - dt * (frozen ? 0 : 0.08));
+    drawTrail(trail, palette, drift, pulse);
+  }
+
   ctx.restore();
 
   spores = spores.filter((spore) => spore.life > 0.01);
+  trails = trails.filter(
+    (trail) => trail.life > 0.02 && trail.points.length > 1,
+  );
 
   drawHud(simTime, palette);
 }
@@ -353,6 +396,56 @@ function drawSpore(spore: Spore, palette: ReturnType<typeof paletteFor>): void {
   ctx.restore();
 }
 
+function drawTrail(
+  trail: Trail,
+  palette: ReturnType<typeof paletteFor>,
+  drift: number,
+  pulse: number,
+): void {
+  if (trail.points.length < 2) {
+    return;
+  }
+
+  const alpha = clamp(trail.life, 0, 1);
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = hsla(trail.hue, 85, 68, alpha * 0.65);
+  ctx.fillStyle = hsla(palette.glowHue, 80, 72, alpha * 0.18);
+  ctx.shadowColor = hsla(palette.glowHue, 90, 70, alpha * 0.3);
+  ctx.shadowBlur = 16 * alpha;
+  ctx.beginPath();
+  const head = trail.points[0];
+  ctx.moveTo(head.x, head.y);
+  for (let index = 1; index < trail.points.length; index += 1) {
+    const point = trail.points[index];
+    const prev = trail.points[index - 1];
+    const mx = (prev.x + point.x) * 0.5;
+    const my = (prev.y + point.y) * 0.5;
+    ctx.quadraticCurveTo(prev.x, prev.y, mx, my);
+  }
+  const tail = trail.points[trail.points.length - 1];
+  ctx.lineTo(tail.x, tail.y);
+  ctx.lineWidth =
+    trail.width * mix(0.7, 1.45, pulse / 2.2) * (0.6 + drift * 0.7);
+  ctx.stroke();
+
+  for (const point of trail.points) {
+    ctx.beginPath();
+    ctx.arc(
+      point.x,
+      point.y,
+      trail.width * 0.18 * point.pressure,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fillStyle = hsla(trail.hue, 78, 80, alpha * 0.3 * point.pressure);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
 function fadeCanvas(
   time: number,
   palette: ReturnType<typeof paletteFor>,
@@ -389,6 +482,7 @@ function drawHud(time: number, palette: ReturnType<typeof paletteFor>): void {
     <span>seed ${escapeHtml(controls.seed || "untitled")}</span>
     <span>mode ${controls.mode}</span>
     <span>spores ${spores.length}</span>
+    <span>trails ${trails.length}</span>
     <span>pulse ${controls.pulse}</span>
   `;
 
@@ -492,4 +586,13 @@ function escapeHtml(value: string): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
 }

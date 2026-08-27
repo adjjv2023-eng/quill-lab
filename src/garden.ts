@@ -35,6 +35,19 @@ export interface Spore {
   radius: number;
 }
 
+export interface TrailPoint {
+  x: number;
+  y: number;
+  pressure: number;
+}
+
+export interface Trail {
+  hue: number;
+  life: number;
+  width: number;
+  points: TrailPoint[];
+}
+
 const MODE_SHIFT: Record<GardenMode, number> = {
   nebula: 220,
   reef: 160,
@@ -126,6 +139,38 @@ export function createSpore(
     life: 1,
     radius: mix(8, 18, clamp(intensity, 0, 1)),
   };
+}
+
+export function createTrail(
+  x: number,
+  y: number,
+  seed: string,
+  intensity = 1,
+): Trail {
+  const base = hashText(seed);
+  return {
+    hue: (base + Math.round(intensity * 47)) % 360,
+    life: 1,
+    width: mix(1.4, 5.2, clamp(intensity, 0, 1)),
+    points: [{ x, y, pressure: 1 }],
+  };
+}
+
+export function appendTrailPoint(
+  trail: Trail,
+  x: number,
+  y: number,
+  pressure = 1,
+): Trail {
+  trail.points.push({
+    x,
+    y,
+    pressure: clamp(pressure, 0.1, 1),
+  });
+  if (trail.points.length > 36) {
+    trail.points.shift();
+  }
+  return trail;
 }
 
 export function oracleFor(seed: string, mode: GardenMode): string {
