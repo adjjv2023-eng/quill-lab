@@ -1,26 +1,31 @@
-# Morri
+# Liminal Garden
 
-Morri is a clean TypeScript starter for building small tools, services, or libraries with a GitHub-first workflow.
+Liminal Garden is an experimental browser sandbox for growing strange little worlds.
 
-## Included
+It is intentionally open-ended: you tune the weather, seed a phrase, and the canvas grows a living field of orbiting spores, petals, and ghost trails.
 
-- TypeScript source and tests
-- ESLint and Prettier configuration
-- GitHub Actions CI
-- Dependabot updates
-- Contribution, security, and pull request guidance
+## What it is for
 
-## Commands
+- Fast visual experimentation
+- Tinkering with motion, color, and density
+- A small, local-first playground you can keep reshaping
+
+## Run it
 
 ```bash
 npm install
-npm run build
-npm test
-npm run lint
+npm run dev
 ```
 
-## Principles
+## Build and check
 
-- Keep the surface area small.
-- Prefer readable defaults over clever setup.
-- Make CI and local development match.
+```bash
+npm run check
+```
+
+## Controls
+
+- Change the seed phrase to grow a different ecosystem
+- Adjust bloom, drift, gravity, and chroma
+- Click the canvas to plant a spore
+- Use `Freeze` to pause the ecosystem and inspect it

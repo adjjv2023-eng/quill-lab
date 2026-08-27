@@ -1,37 +1,24 @@
 {
-  "name": "morri",
+  "name": "liminal-garden",
   "version": "0.1.0",
   "type": "module",
-  "description": "A fast, local-first CLI that audits a repository's health and prints a scored report.",
+  "private": true,
+  "description": "An experimental browser sandbox for growing strange little worlds.",
   "license": "MIT",
   "packageManager": "npm@10.9.2",
   "engines": {
     "node": ">=22"
   },
-  "bin": {
-    "morri": "bin/morri.mjs"
-  },
-  "files": [
-    "dist",
-    "bin"
-  ],
-  "keywords": [
-    "audit",
-    "repository",
-    "health",
-    "cli",
-    "quality",
-    "github"
-  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "check": "npm run build && npm run lint && npm test",
-    "clean": "rm -rf dist coverage",
+    "build": "vite build",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "dev": "vite",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.test.ts\"",
+    "preview": "vite preview",
     "test": "vitest run",
-    "prepare": "npm run build"
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
@@ -41,6 +28,7 @@
     "prettier": "^3.6.2",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.40.0",
+    "vite": "^7.1.2",
     "vitest": "^3.2.4"
   }
 }

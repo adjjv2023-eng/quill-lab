@@ -1,0 +1,495 @@
+import "./style.css";
+import {
+  clamp,
+  createOrbiters,
+  createSpore,
+  hsla,
+  mix,
+  oracleFor,
+  paletteFor,
+  titleFor,
+  type GardenControls,
+  type GardenMode,
+  type Orb,
+  type Spore,
+} from "./garden";
+
+const STORAGE_KEY = "liminal-garden:controls";
+
+const DEFAULT_CONTROLS: GardenControls = {
+  seed: "moon root",
+  bloom: 64,
+  drift: 42,
+  gravity: 28,
+  chroma: 78,
+  pulse: 58,
+  mode: "nebula",
+};
+
+const app = document.querySelector<HTMLDivElement>("#app")!;
+
+app.innerHTML = `
+  <main class="shell">
+    <section class="hero">
+      <div class="hero__copy">
+        <p class="eyebrow">Experimental sandbox</p>
+        <h1>Liminal Garden</h1>
+        <p class="lede">
+          Seed a phrase, tune the weather, and grow a small world of orbiting spores, petals, and ghost trails.
+        </p>
+      </div>
+      <div class="hero__chips" id="chips"></div>
+    </section>
+
+    <section class="stage" aria-label="generative stage">
+      <canvas class="stage__canvas" id="garden-canvas"></canvas>
+      <div class="stage__overlay">
+        <div class="oracle" id="oracle"></div>
+        <div class="hint">click anywhere in the canvas to plant a spore</div>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="controls">
+      <label class="field">
+        <span>Seed phrase</span>
+        <input id="seed" type="text" value="${DEFAULT_CONTROLS.seed}" />
+      </label>
+
+      <label class="field">
+        <span>Mode</span>
+        <select id="mode">
+          <option value="nebula">Nebula</option>
+          <option value="reef">Reef</option>
+          <option value="ember">Ember</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Bloom</span>
+        <input id="bloom" type="range" min="0" max="100" value="${DEFAULT_CONTROLS.bloom}" />
+      </label>
+
+      <label class="field">
+        <span>Drift</span>
+        <input id="drift" type="range" min="0" max="100" value="${DEFAULT_CONTROLS.drift}" />
+      </label>
+
+      <label class="field">
+        <span>Gravity</span>
+        <input id="gravity" type="range" min="0" max="100" value="${DEFAULT_CONTROLS.gravity}" />
+      </label>
+
+      <label class="field">
+        <span>Pulse</span>
+        <input id="pulse" type="range" min="0" max="100" value="${DEFAULT_CONTROLS.pulse}" />
+      </label>
+
+      <label class="field">
+        <span>Chroma</span>
+        <input id="chroma" type="range" min="0" max="100" value="${DEFAULT_CONTROLS.chroma}" />
+      </label>
+
+      <div class="actions">
+        <button id="randomize" type="button">Randomize</button>
+        <button id="freeze" type="button" data-state="off">Freeze</button>
+        <button id="clear" type="button">Sweep</button>
+      </div>
+
+      <div class="stats" id="stats"></div>
+    </aside>
+  </main>
+`;
+
+const canvas = document.querySelector<HTMLCanvasElement>("#garden-canvas")!;
+const oracleNode = document.querySelector<HTMLDivElement>("#oracle")!;
+const chipsNode = document.querySelector<HTMLDivElement>("#chips")!;
+const statsNode = document.querySelector<HTMLDivElement>("#stats")!;
+const freezeButton = document.querySelector<HTMLButtonElement>("#freeze")!;
+
+const ctx = canvas.getContext("2d")!;
+
+const saved = readSavedControls();
+let controls: GardenControls = { ...DEFAULT_CONTROLS, ...saved };
+
+const inputs = {
+  seed: document.querySelector<HTMLInputElement>("#seed")!,
+  mode: document.querySelector<HTMLSelectElement>("#mode")!,
+  bloom: document.querySelector<HTMLInputElement>("#bloom")!,
+  drift: document.querySelector<HTMLInputElement>("#drift")!,
+  gravity: document.querySelector<HTMLInputElement>("#gravity")!,
+  pulse: document.querySelector<HTMLInputElement>("#pulse")!,
+  chroma: document.querySelector<HTMLInputElement>("#chroma")!,
+};
+
+setControlsToUI(controls);
+
+const stage = {
+  width: 0,
+  height: 0,
+  dpr: Math.max(1, Math.min(2, window.devicePixelRatio || 1)),
+};
+
+const pointer = {
+  x: 0,
+  y: 0,
+  active: false,
+};
+
+let frozen = false;
+let orbiters = createOrbiters(controls.seed, controls);
+let spores: Spore[] = [];
+let lastTime = performance.now();
+let simulationTime = 0;
+
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+canvas.addEventListener("pointermove", (event) => {
+  const rect = canvas.getBoundingClientRect();
+  pointer.x = event.clientX - rect.left;
+  pointer.y = event.clientY - rect.top;
+  pointer.active = true;
+});
+
+canvas.addEventListener("pointerleave", () => {
+  pointer.active = false;
+});
+
+canvas.addEventListener("pointerdown", (event) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  spores.push(createSpore(x, y, controls.seed, controls.bloom / 100));
+});
+
+document
+  .querySelector<HTMLButtonElement>("#randomize")
+  ?.addEventListener("click", () => {
+    controls = {
+      ...controls,
+      seed: randomSeedWord(),
+      bloom: randomInt(48, 92),
+      drift: randomInt(16, 72),
+      gravity: randomInt(10, 56),
+      chroma: randomInt(60, 100),
+      pulse: randomInt(30, 88),
+      mode: randomMode(),
+    };
+    orbiters = createOrbiters(controls.seed, controls);
+    spores = [];
+    setControlsToUI(controls);
+    persistControls(controls);
+    updateOracle();
+  });
+
+freezeButton.addEventListener("click", () => {
+  frozen = !frozen;
+  freezeButton.dataset.state = frozen ? "on" : "off";
+  freezeButton.textContent = frozen ? "Thaw" : "Freeze";
+});
+
+document
+  .querySelector<HTMLButtonElement>("#clear")
+  ?.addEventListener("click", () => {
+    spores = [];
+  });
+
+for (const [key, input] of Object.entries(inputs)) {
+  input.addEventListener("input", () => {
+    controls = readControlsFromUI();
+    orbiters = createOrbiters(controls.seed, controls);
+    persistControls(controls);
+    if (key === "seed" || key === "mode") {
+      updateOracle();
+    }
+  });
+}
+
+updateOracle();
+requestAnimationFrame(tick);
+
+function tick(now: number): void {
+  const dt = Math.min(0.04, (now - lastTime) / 1000);
+  lastTime = now;
+  if (!frozen) {
+    simulationTime += dt;
+  }
+  draw(simulationTime, dt);
+  requestAnimationFrame(tick);
+}
+
+function draw(simTime: number, dt: number): void {
+  const palette = paletteFor(controls.seed, controls.mode, controls.chroma);
+  const pulse = mix(0.35, 2.2, controls.pulse / 100);
+  const drift = controls.drift / 100;
+  const gravity = controls.gravity / 100;
+  const bloom = controls.bloom / 100;
+
+  fadeCanvas(simTime, palette);
+
+  const centerX =
+    stage.width * 0.5 +
+    (pointer.active ? (pointer.x - stage.width * 0.5) * 0.1 : 0);
+  const centerY =
+    stage.height * 0.52 +
+    (pointer.active ? (pointer.y - stage.height * 0.5) * 0.1 : 0);
+  const time = simTime;
+  const spread = Math.min(stage.width, stage.height) * mix(0.18, 0.42, bloom);
+
+  drawRings(centerX, centerY, spread, palette);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+
+  for (let index = 0; index < orbiters.length; index += 1) {
+    const orb = orbiters[index];
+    const wobble = Math.sin(time * pulse + orb.phase * 2 + index * 0.17);
+    const gravityLift = Math.cos(time * 0.35 + orb.phase) * gravity * 24;
+    const orbitRadius =
+      orb.radius * mix(0.58, 1.24, bloom) + wobble * orb.wobble * 14 * drift;
+    const angle =
+      orb.angle + time * orb.speed * 1200 * pulse + wobble * drift * 0.9;
+    const x = centerX + Math.cos(angle) * orbitRadius;
+    const y = centerY + Math.sin(angle) * orbitRadius + gravityLift;
+    const trail = 0.12 + bloom * 0.22;
+
+    drawPetal(x, y, orb, palette, trail);
+    drawOrbitLine(centerX, centerY, x, y, palette, trail * 0.7);
+  }
+
+  for (const spore of spores) {
+    spore.life = Math.max(0, spore.life - dt * (frozen ? 0 : 0.12));
+    drawSpore(spore, palette);
+  }
+
+  ctx.restore();
+
+  spores = spores.filter((spore) => spore.life > 0.01);
+
+  drawHud(simTime, palette);
+}
+
+function drawRings(
+  centerX: number,
+  centerY: number,
+  spread: number,
+  palette: ReturnType<typeof paletteFor>,
+): void {
+  const rings = 4;
+  ctx.save();
+  ctx.strokeStyle = hsla(palette.baseHue, 32, 70, 0.18);
+  ctx.lineWidth = 1;
+  for (let index = 1; index <= rings; index += 1) {
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, spread * (index / rings), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawOrbitLine(
+  centerX: number,
+  centerY: number,
+  x: number,
+  y: number,
+  palette: ReturnType<typeof paletteFor>,
+  alpha: number,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(centerX, centerY);
+  ctx.lineTo(x, y);
+  ctx.strokeStyle = hsla(palette.glowHue, 78, 62, alpha * 0.35);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function drawPetal(
+  x: number,
+  y: number,
+  orb: Orb,
+  palette: ReturnType<typeof paletteFor>,
+  alpha: number,
+): void {
+  const scale = orb.size;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(orb.angle * 0.25);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, scale * 2.4, scale, orb.angle, 0, Math.PI * 2);
+  ctx.fillStyle = hsla(
+    (palette.accentHue + orb.hue * 0.35) % 360,
+    82,
+    64,
+    alpha,
+  );
+  ctx.fill();
+  ctx.strokeStyle = hsla(palette.coreHue, 92, 82, alpha * 0.7);
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawSpore(spore: Spore, palette: ReturnType<typeof paletteFor>): void {
+  const alpha = clamp(spore.life, 0, 1);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(
+    spore.x,
+    spore.y,
+    spore.radius * (1 + (1 - alpha) * 0.8),
+    0,
+    Math.PI * 2,
+  );
+  ctx.fillStyle = hsla(
+    (spore.hue + palette.glowHue) % 360,
+    86,
+    66,
+    alpha * 0.35,
+  );
+  ctx.fill();
+  ctx.lineWidth = 1.25;
+  ctx.strokeStyle = hsla(palette.coreHue, 92, 86, alpha * 0.55);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function fadeCanvas(
+  time: number,
+  palette: ReturnType<typeof paletteFor>,
+): void {
+  const gradient = ctx.createLinearGradient(0, 0, stage.width, stage.height);
+  gradient.addColorStop(0, hsla(palette.baseHue, 30, 9, 0.16));
+  gradient.addColorStop(1, hsla(palette.coreHue, 28, 12, 0.16));
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, stage.width, stage.height);
+
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = hsla(palette.baseHue, 12, 4, 0.16);
+  ctx.fillRect(0, 0, stage.width, stage.height);
+  ctx.restore();
+
+  const shimmer = Math.sin(time * 1.2) * 0.015 + 0.04;
+  ctx.save();
+  ctx.globalAlpha = shimmer;
+  ctx.fillStyle = hsla(palette.glowHue, 70, 75, 0.12);
+  ctx.fillRect(0, 0, stage.width, stage.height);
+  ctx.restore();
+}
+
+function drawHud(time: number, palette: ReturnType<typeof paletteFor>): void {
+  const title = titleFor(controls.seed);
+  const oracle = oracleFor(controls.seed, controls.mode);
+  oracleNode.innerHTML = `
+    <strong>${title}</strong>
+    <span>${oracle}</span>
+  `;
+
+  chipsNode.innerHTML = `
+    <span>seed ${escapeHtml(controls.seed || "untitled")}</span>
+    <span>mode ${controls.mode}</span>
+    <span>spores ${spores.length}</span>
+    <span>pulse ${controls.pulse}</span>
+  `;
+
+  statsNode.innerHTML = `
+    <div><strong>${Math.round(controls.bloom)}</strong><span>bloom</span></div>
+    <div><strong>${Math.round(controls.drift)}</strong><span>drift</span></div>
+    <div><strong>${Math.round(controls.gravity)}</strong><span>gravity</span></div>
+    <div><strong>${Math.round(controls.chroma)}</strong><span>chroma</span></div>
+    <div><strong>${frozen ? "paused" : "live"}</strong><span>state</span></div>
+    <div><strong>${Math.round(time % 60)}s</strong><span>cycle</span></div>
+  `;
+
+  document.documentElement.style.setProperty(
+    "--accent-hue",
+    String(palette.accentHue.toFixed(2)),
+  );
+  document.documentElement.style.setProperty(
+    "--base-hue",
+    String(palette.baseHue.toFixed(2)),
+  );
+}
+
+function resizeCanvas(): void {
+  const rect = canvas.getBoundingClientRect();
+  stage.dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  stage.width = Math.max(1, rect.width);
+  stage.height = Math.max(1, rect.height);
+  canvas.width = Math.max(1, Math.floor(rect.width * stage.dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height * stage.dpr));
+  ctx.setTransform(stage.dpr, 0, 0, stage.dpr, 0, 0);
+}
+
+function setControlsToUI(state: GardenControls): void {
+  inputs.seed!.value = state.seed;
+  inputs.mode!.value = state.mode;
+  inputs.bloom!.value = String(state.bloom);
+  inputs.drift!.value = String(state.drift);
+  inputs.gravity!.value = String(state.gravity);
+  inputs.pulse!.value = String(state.pulse);
+  inputs.chroma!.value = String(state.chroma);
+}
+
+function readControlsFromUI(): GardenControls {
+  return {
+    seed: inputs.seed!.value.trim() || DEFAULT_CONTROLS.seed,
+    mode: inputs.mode!.value as GardenMode,
+    bloom: Number(inputs.bloom!.value),
+    drift: Number(inputs.drift!.value),
+    gravity: Number(inputs.gravity!.value),
+    pulse: Number(inputs.pulse!.value),
+    chroma: Number(inputs.chroma!.value),
+  };
+}
+
+function updateOracle(): void {
+  oracleNode.textContent = `${titleFor(controls.seed)} / ${oracleFor(controls.seed, controls.mode)}`;
+}
+
+function readSavedControls(): Partial<GardenControls> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Partial<GardenControls>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistControls(state: GardenControls): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Storage is optional in this sandbox.
+  }
+}
+
+function randomSeedWord(): string {
+  const words = [
+    "moon root",
+    "violet tide",
+    "glass pollen",
+    "ember field",
+    "salt wind",
+    "hollow bloom",
+    "arc light",
+    "feral atlas",
+  ];
+  return words[randomInt(0, words.length - 1)];
+}
+
+function randomMode(): GardenMode {
+  return ["nebula", "reef", "ember"][randomInt(0, 2)] as GardenMode;
+}
+
+function randomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
