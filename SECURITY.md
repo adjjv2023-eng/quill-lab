@@ -9,3 +9,4 @@ Include:
 - Steps to reproduce
 - Any suggested mitigation
 
+Do not open a public issue for vulnerabilities unless the maintainer explicitly asks you to.

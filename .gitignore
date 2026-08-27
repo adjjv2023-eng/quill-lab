@@ -20,6 +20,7 @@ yarn-error.log*
 !.env.example
 
 # Common build artifacts
+node_modules/
 dist/
 build/
 coverage/

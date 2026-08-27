@@ -12,4 +12,3 @@ labels: bug
 ## Steps to reproduce
 
 ## Additional context
-

@@ -1,20 +1,26 @@
 # Morri
 
-Starter repository base for GitHub.
+Morri is a clean TypeScript starter for building small tools, services, or libraries with a GitHub-first workflow.
 
-## What is here
+## Included
 
-- `README.md` for project orientation
-- `.editorconfig` for consistent formatting
-- `.gitignore` for common local artifacts
-- `LICENSE` with an MIT license
-- `CONTRIBUTING.md` for contribution workflow
-- `SECURITY.md` for vulnerability reporting
-- GitHub templates and a basic CI sanity check
+- TypeScript source and tests
+- ESLint and Prettier configuration
+- GitHub Actions CI
+- Dependabot updates
+- Contribution, security, and pull request guidance
 
-## Next steps
+## Commands
 
-1. Add the actual application or library stack.
-2. Replace placeholder project language with a real product description.
-3. Expand CI with linting and tests once the stack is chosen.
+```bash
+npm install
+npm run build
+npm test
+npm run lint
+```
 
+## Principles
+
+- Keep the surface area small.
+- Prefer readable defaults over clever setup.
+- Make CI and local development match.
