@@ -17,8 +17,6 @@ import {
   type Spore,
 } from "./garden";
 
-const STORAGE_KEY = "quill:controls";
-
 const DEFAULT_CONTROLS: GardenControls = {
   seed: "moon ink",
   bloom: 64,
@@ -99,6 +97,7 @@ app.innerHTML = `
         <button id="randomize" type="button">Randomize</button>
         <button id="freeze" type="button" data-state="off">Freeze</button>
         <button id="capture" type="button">Capture</button>
+        <button id="share" type="button">Share</button>
         <button id="clear" type="button">Sweep</button>
       </div>
 
@@ -113,10 +112,11 @@ const chipsNode = document.querySelector<HTMLDivElement>("#chips")!;
 const statsNode = document.querySelector<HTMLDivElement>("#stats")!;
 const freezeButton = document.querySelector<HTMLButtonElement>("#freeze")!;
 const captureButton = document.querySelector<HTMLButtonElement>("#capture")!;
+const shareButton = document.querySelector<HTMLButtonElement>("#share")!;
 
 const ctx = canvas.getContext("2d")!;
 
-const saved = readSavedControls();
+const saved = readUrlControls();
 let controls: GardenControls = { ...DEFAULT_CONTROLS, ...saved };
 
 const inputs = {
@@ -130,6 +130,7 @@ const inputs = {
 };
 
 setControlsToUI(controls);
+updateUrlState(controls);
 
 const stage = {
   width: 0,
@@ -207,6 +208,20 @@ captureButton.addEventListener("click", () => {
   link.click();
 });
 
+shareButton.addEventListener("click", async () => {
+  updateUrlState(controls);
+  const url = `${location.origin}${location.pathname}${location.search}${location.hash}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    shareButton.textContent = "Copied";
+    window.setTimeout(() => {
+      shareButton.textContent = "Share";
+    }, 900);
+  } catch {
+    window.prompt("Copy this URL", url);
+  }
+});
+
 document
   .querySelector<HTMLButtonElement>("#clear")
   ?.addEventListener("click", clearCanvas);
@@ -215,7 +230,7 @@ for (const [key, input] of Object.entries(inputs)) {
   input.addEventListener("input", () => {
     controls = readControlsFromUI();
     orbiters = createOrbiters(controls.seed, controls);
-    persistControls(controls);
+    updateUrlState(controls);
     if (key === "seed" || key === "mode") {
       updateOracle();
     }
@@ -552,15 +567,6 @@ function updateOracle(): void {
   oracleNode.textContent = `${titleFor(controls.seed)} / ${oracleFor(controls.seed, controls.mode)}`;
 }
 
-function readSavedControls(): Partial<GardenControls> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Partial<GardenControls>) : {};
-  } catch {
-    return {};
-  }
-}
-
 function randomizeDraft(): void {
   controls = {
     ...controls,
@@ -577,7 +583,7 @@ function randomizeDraft(): void {
   trails = [];
   activeTrail = null;
   setControlsToUI(controls);
-  persistControls(controls);
+  updateUrlState(controls);
   updateOracle();
 }
 
@@ -598,14 +604,6 @@ function plantMark(x: number, y: number, pressure = 1): void {
   );
   trails.push(activeTrail);
   spores.push(createSpore(x, y, controls.seed, controls.bloom / 100));
-}
-
-function persistControls(state: GardenControls): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // Storage is optional in this sandbox.
-  }
 }
 
 function randomSeedWord(): string {
@@ -642,6 +640,61 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLInputElement || target instanceof HTMLSelectElement
   );
+}
+
+function readUrlControls(): Partial<GardenControls> {
+  const params = new URLSearchParams(location.hash.replace(/^#/, ""));
+  if ([...params.keys()].length === 0) {
+    return {};
+  }
+
+  const seed = params.get("s")?.trim();
+  const mode = params.get("m");
+
+  const controls: Partial<GardenControls> = {};
+  if (seed) controls.seed = seed;
+  if (mode === "nebula" || mode === "reef" || mode === "ember") {
+    controls.mode = mode;
+  }
+
+  const bloom = parseMaybeNumber(params.get("b"));
+  const drift = parseMaybeNumber(params.get("d"));
+  const gravity = parseMaybeNumber(params.get("g"));
+  const pulse = parseMaybeNumber(params.get("p"));
+  const chroma = parseMaybeNumber(params.get("c"));
+
+  if (bloom !== undefined) controls.bloom = bloom;
+  if (drift !== undefined) controls.drift = drift;
+  if (gravity !== undefined) controls.gravity = gravity;
+  if (pulse !== undefined) controls.pulse = pulse;
+  if (chroma !== undefined) controls.chroma = chroma;
+
+  return controls;
+}
+
+function updateUrlState(state: GardenControls): void {
+  const params = new URLSearchParams();
+  params.set("s", state.seed);
+  params.set("m", state.mode);
+  params.set("b", String(state.bloom));
+  params.set("d", String(state.drift));
+  params.set("g", String(state.gravity));
+  params.set("p", String(state.pulse));
+  params.set("c", String(state.chroma));
+  history.replaceState(
+    null,
+    "",
+    `${location.pathname}${location.search}#${params}`,
+  );
+}
+
+function parseMaybeNumber(value: string | null): number | undefined {
+  if (value === null || value.trim().length === 0) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function slugify(value: string): string {

@@ -29,6 +29,12 @@ npm run check
 - Adjust bloom, drift, gravity, pulse, and chroma
 - Click or drag on the canvas to draw living ink
 - Use `Freeze` to pause the draft and inspect it
+- Use `Share` to copy the current draft URL
+
+## State
+
+QUILL keeps the current draft in the URL hash instead of writing persistent local state.
+That makes it easy to share and keeps the app lightweight on disk.
 
 ## Shortcuts
 
