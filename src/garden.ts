@@ -146,13 +146,14 @@ export function createTrail(
   y: number,
   seed: string,
   intensity = 1,
+  pressure = 1,
 ): Trail {
   const base = hashText(seed);
   return {
     hue: (base + Math.round(intensity * 47)) % 360,
     life: 1,
     width: mix(1.4, 5.2, clamp(intensity, 0, 1)),
-    points: [{ x, y, pressure: 1 }],
+    points: [{ x, y, pressure: clamp(pressure, 0.1, 1) }],
   };
 }
 
@@ -175,7 +176,7 @@ export function appendTrailPoint(
 
 export function oracleFor(seed: string, mode: GardenMode): string {
   const words = {
-    nebula: ["soft", "drifting", "star-silt", "halo", "echo"],
+    nebula: ["soft", "drifting", "murmured", "halo", "echo"],
     reef: ["tide-born", "luminous", "coral", "current", "glimmer"],
     ember: ["heat", "sparks", "ash", "cinder", "pulse"],
   }[mode];
@@ -188,7 +189,7 @@ export function oracleFor(seed: string, mode: GardenMode): string {
 
 export function titleFor(seed: string): string {
   const names = [
-    "Liminal",
+    "Quill",
     "Murmur",
     "Feral",
     "Velvet",
@@ -198,14 +199,14 @@ export function titleFor(seed: string): string {
     "Prism",
   ];
   const nouns = [
-    "garden",
-    "reef",
+    "draft",
+    "margin",
     "archive",
     "engine",
-    "orbit",
-    "species",
-    "weather",
-    "atlas",
+    "glyph",
+    "folio",
+    "stanza",
+    "palimpsest",
   ];
   const hash = hashText(seed);
   return `${names[hash % names.length]} ${nouns[(hash >> 4) % nouns.length]}`;

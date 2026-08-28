@@ -1,9 +1,9 @@
 {
-  "name": "liminal-garden",
+  "name": "quill",
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "description": "An experimental browser sandbox for growing strange little worlds.",
+  "description": "An experimental writing sandbox for shaping living drafts and ink trails.",
   "license": "MIT",
   "packageManager": "npm@10.9.2",
   "engines": {

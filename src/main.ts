@@ -17,10 +17,10 @@ import {
   type Spore,
 } from "./garden";
 
-const STORAGE_KEY = "liminal-garden:controls";
+const STORAGE_KEY = "quill:controls";
 
 const DEFAULT_CONTROLS: GardenControls = {
-  seed: "moon root",
+  seed: "moon ink",
   bloom: 64,
   drift: 42,
   gravity: 28,
@@ -36,9 +36,9 @@ app.innerHTML = `
     <section class="hero">
       <div class="hero__copy">
         <p class="eyebrow">Experimental sandbox</p>
-        <h1>Liminal Garden</h1>
+        <h1>QUILL</h1>
         <p class="lede">
-          Seed a phrase, tune the weather, and grow a small world of orbiting spores, petals, and ghost trails.
+          Seed a phrase, tune the pressure, and grow a living draft of glyphs, echoes, and ink trails.
         </p>
       </div>
       <div class="hero__chips" id="chips"></div>
@@ -48,7 +48,10 @@ app.innerHTML = `
       <canvas class="stage__canvas" id="garden-canvas"></canvas>
       <div class="stage__overlay">
         <div class="oracle" id="oracle"></div>
-        <div class="hint">click anywhere in the canvas to plant a spore</div>
+        <div class="hint">
+          drag to write · space seed · r randomize · f freeze · c capture · x
+          sweep
+        </div>
       </div>
     </section>
 
@@ -61,9 +64,9 @@ app.innerHTML = `
       <label class="field">
         <span>Mode</span>
         <select id="mode">
-          <option value="nebula">Nebula</option>
-          <option value="reef">Reef</option>
-          <option value="ember">Ember</option>
+          <option value="nebula">Nebula ink</option>
+          <option value="reef">Reef gloss</option>
+          <option value="ember">Ember draft</option>
         </select>
       </label>
 
@@ -174,9 +177,7 @@ canvas.addEventListener("pointerdown", (event) => {
   const y = event.clientY - rect.top;
   pointer.down = true;
   canvas.setPointerCapture(event.pointerId);
-  activeTrail = createTrail(x, y, controls.seed, controls.chroma / 100);
-  trails.push(activeTrail);
-  spores.push(createSpore(x, y, controls.seed, controls.bloom / 100));
+  plantMark(x, y, event.pressure || 0.7);
 });
 
 canvas.addEventListener("pointerup", () => {
@@ -191,23 +192,7 @@ canvas.addEventListener("pointercancel", () => {
 
 document
   .querySelector<HTMLButtonElement>("#randomize")
-  ?.addEventListener("click", () => {
-    controls = {
-      ...controls,
-      seed: randomSeedWord(),
-      bloom: randomInt(48, 92),
-      drift: randomInt(16, 72),
-      gravity: randomInt(10, 56),
-      chroma: randomInt(60, 100),
-      pulse: randomInt(30, 88),
-      mode: randomMode(),
-    };
-    orbiters = createOrbiters(controls.seed, controls);
-    spores = [];
-    setControlsToUI(controls);
-    persistControls(controls);
-    updateOracle();
-  });
+  ?.addEventListener("click", randomizeDraft);
 
 freezeButton.addEventListener("click", () => {
   frozen = !frozen;
@@ -217,17 +202,14 @@ freezeButton.addEventListener("click", () => {
 
 captureButton.addEventListener("click", () => {
   const link = document.createElement("a");
-  link.download = `${slugify(controls.seed || "liminal-garden")}-${Date.now()}.png`;
+  link.download = `${slugify(controls.seed || "quill")}-${Date.now()}.png`;
   link.href = canvas.toDataURL("image/png");
   link.click();
 });
 
 document
   .querySelector<HTMLButtonElement>("#clear")
-  ?.addEventListener("click", () => {
-    spores = [];
-    trails = [];
-  });
+  ?.addEventListener("click", clearCanvas);
 
 for (const [key, input] of Object.entries(inputs)) {
   input.addEventListener("input", () => {
@@ -239,6 +221,35 @@ for (const [key, input] of Object.entries(inputs)) {
     }
   });
 }
+
+window.addEventListener("keydown", (event) => {
+  if (isTypingTarget(event.target)) {
+    return;
+  }
+
+  switch (event.key.toLowerCase()) {
+    case "r":
+      event.preventDefault();
+      randomizeDraft();
+      break;
+    case "f":
+      event.preventDefault();
+      freezeButton.click();
+      break;
+    case "c":
+      event.preventDefault();
+      captureButton.click();
+      break;
+    case "x":
+      event.preventDefault();
+      clearCanvas();
+      break;
+    case " ":
+      event.preventDefault();
+      plantMark(stage.width * 0.5, stage.height * 0.5, 0.9);
+      break;
+  }
+});
 
 updateOracle();
 requestAnimationFrame(tick);
@@ -550,6 +561,45 @@ function readSavedControls(): Partial<GardenControls> {
   }
 }
 
+function randomizeDraft(): void {
+  controls = {
+    ...controls,
+    seed: randomSeedWord(),
+    bloom: randomInt(48, 92),
+    drift: randomInt(16, 72),
+    gravity: randomInt(10, 56),
+    chroma: randomInt(60, 100),
+    pulse: randomInt(30, 88),
+    mode: randomMode(),
+  };
+  orbiters = createOrbiters(controls.seed, controls);
+  spores = [];
+  trails = [];
+  activeTrail = null;
+  setControlsToUI(controls);
+  persistControls(controls);
+  updateOracle();
+}
+
+function clearCanvas(): void {
+  spores = [];
+  trails = [];
+  activeTrail = null;
+  pointer.down = false;
+}
+
+function plantMark(x: number, y: number, pressure = 1): void {
+  activeTrail = createTrail(
+    x,
+    y,
+    controls.seed,
+    controls.chroma / 100,
+    pressure,
+  );
+  trails.push(activeTrail);
+  spores.push(createSpore(x, y, controls.seed, controls.bloom / 100));
+}
+
 function persistControls(state: GardenControls): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -560,14 +610,14 @@ function persistControls(state: GardenControls): void {
 
 function randomSeedWord(): string {
   const words = [
-    "moon root",
-    "violet tide",
-    "glass pollen",
-    "ember field",
-    "salt wind",
-    "hollow bloom",
+    "moon ink",
+    "violet draft",
+    "glass glyph",
+    "ember line",
+    "salt margin",
+    "hollow stanza",
     "arc light",
-    "feral atlas",
+    "feral folio",
   ];
   return words[randomInt(0, words.length - 1)];
 }
@@ -586,6 +636,12 @@ function escapeHtml(value: string): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement || target instanceof HTMLSelectElement
+  );
 }
 
 function slugify(value: string): string {

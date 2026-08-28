@@ -1,12 +1,12 @@
-# Liminal Garden
+# QUILL
 
-Liminal Garden is an experimental browser sandbox for growing strange little worlds.
+QUILL is an experimental writing sandbox for shaping living drafts and ink trails.
 
-It is intentionally open-ended: you tune the weather, seed a phrase, and the canvas grows a living field of orbiting spores, petals, and ghost trails.
+It is intentionally open-ended: you seed a phrase, tune the pressure, and the canvas grows a drifting field of glyphs, echoes, and handwritten marks.
 
 ## What it is for
 
-- Fast visual experimentation
+- Fast visual writing experiments
 - Tinkering with motion, color, and density
 - A small, local-first playground you can keep reshaping
 
@@ -25,7 +25,15 @@ npm run check
 
 ## Controls
 
-- Change the seed phrase to grow a different ecosystem
-- Adjust bloom, drift, gravity, and chroma
-- Click the canvas to plant a spore
-- Use `Freeze` to pause the ecosystem and inspect it
+- Change the seed phrase to generate a different draft
+- Adjust bloom, drift, gravity, pulse, and chroma
+- Click or drag on the canvas to draw living ink
+- Use `Freeze` to pause the draft and inspect it
+
+## Shortcuts
+
+- `R` randomizes the draft
+- `F` toggles freeze
+- `C` captures a PNG
+- `X` clears the canvas
+- `Space` plants an ink mark at center
